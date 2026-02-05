@@ -1,6 +1,8 @@
-import Link from "next/link";
+'use client';
+import Link from 'next/link';
 
 export default function Home() {
+
   return (
     <div className="min-h-[80vh] flex flex-col justify-center items-center px-4">
       <div className="text-center max-w-2xl">
