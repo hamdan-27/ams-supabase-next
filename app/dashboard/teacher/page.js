@@ -45,7 +45,9 @@ export default function TeacherDashboard() {
         courses (
           id,
           title,
-          description
+          description,
+          enrollments(count),
+          course_teachers(count)
         )
       `)
       .eq('teacher_id', teacherId)
@@ -70,18 +72,21 @@ export default function TeacherDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {courses.map((course) => (
-              <div key={course.id} className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold mb-2">{course.title}</h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  {course.description || 'No description'}
-                </p>
-                <Link
-                  href={`/courses/${course.id}/attendance`}
-                  className="block w-full bg-blue-600 text-white text-center py-2 rounded-md hover:bg-blue-700"
-                >
-                  Mark Attendance
-                </Link>
-              </div>
+              <Link
+                key={course.id}
+                href={`/courses/${course.id}`}
+              >
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold mb-2">{course.title}</h3>
+                  <p className="text-gray-600 text-sm mb-4">
+                    {course.description || 'No description'}
+                  </p>
+                  <div className="flex justify-between text-sm text-gray-500 mt-4">
+                    <span>Teachers: {course.course_teachers?.[0]?.count ?? 0}</span>
+                    <span>Students: {course.enrollments?.[0]?.count ?? 0}</span>
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         )}
