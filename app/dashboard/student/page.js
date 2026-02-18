@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function StudentDashboard() {
   const [user, setUser] = useState(null)
@@ -92,12 +93,17 @@ export default function StudentDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {courses.map((course) => (
-              <div key={course.id} className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold">{course.title}</h3>
-                <p className="text-gray-600 text-sm mt-2">
-                  {course.description || 'No description'}
-                </p>
-              </div>
+              <Link
+                key={course.id}
+                href={`/courses/${course.id}`}
+              >
+                <div key={course.id} className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold">{course.title}</h3>
+                  <p className="text-gray-600 text-sm mt-2">
+                    {course.description || 'No description'}
+                  </p>
+                </div>
+              </Link>
             ))}
           </div>
         )}
