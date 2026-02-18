@@ -130,6 +130,7 @@ export default function AttendancePage() {
         .map(([studentId, status]) => ({
           course_id: courseId,
           student_id: studentId,
+          marked_by: user.id,
           date: selectedDate,
           status: status,
           notes: notes[studentId] || null
@@ -186,10 +187,10 @@ export default function AttendancePage() {
         {/* Header */}
         <div className="mb-6">
           <Link
-            href="/dashboard/teacher"
+            href={`/courses/${courseId}`}
             className="text-blue-600 hover:text-blue-700 mb-2 inline-block"
           >
-            ← Back to Dashboard
+            ← Back to Course
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">{course?.title}</h1>
           <p className="text-gray-600 mt-1">{course?.description || 'No description'}</p>
