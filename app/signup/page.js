@@ -17,6 +17,15 @@ export default function SignupPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
     try {
       const { data: { user }, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -54,8 +63,6 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
-
-    console.log("Signup:", { name, email, password });
   };
 
   return (
