@@ -17,6 +17,8 @@ export default function CoursePage() {
   const [editForm, setEditForm] = useState({ title: '', description: '' })
   const [availableStudents, setAvailableStudents] = useState([])
   const [showEnrollModal, setShowEnrollModal] = useState(false)
+  const [attendanceRecords, setAttendanceRecords] = useState([])
+  const [attendanceStats, setAttendanceStats] = useState({ present: 0, absent: 0, total: 0, percentage: 0 })
   const router = useRouter()
   const params = useParams()
   const courseId = params.courseId
@@ -83,7 +85,6 @@ export default function CoursePage() {
       .single();
 
     if (courseWithTeachers?.teachers) {
-      console.log('courseWithTeachers', courseWithTeachers);
       setTeachers(courseWithTeachers.teachers)
     }
 
@@ -97,6 +98,34 @@ export default function CoursePage() {
       const enrolledIds = studentList.map(s => s.id)
       const available = allStudents?.filter(s => !enrolledIds.includes(s.id)) || []
       setAvailableStudents(available)
+
+      // Load all attendance records for this course (for teachers)
+      const { data: attendance } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('course_id', courseId)
+        .order('date', { ascending: false })
+
+      setAttendanceRecords(attendance || [])
+
+      // Calculate overall stats
+      const present = attendance?.filter(a => a.status === 'present').length || 0
+      const absent = attendance?.filter(a => a.status === 'absent').length || 0
+      const total = attendance?.length || 0
+      const percentage = total > 0 ? Math.round((present / total) * 100) : 0
+
+      setAttendanceStats({ present, absent, total, percentage })
+    }
+  }
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'present':
+        return 'bg-green-100 text-green-800'
+      case 'absent':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
     }
   }
 
@@ -214,12 +243,18 @@ export default function CoursePage() {
 
         {/* Student Actions - View My Attendance */}
         {isStudent && (
-          <div className="mb-6">
+          <div className="mb-6 flex gap-3">
             <Link
               href={`/courses/${courseId}/my-attendance`}
               className="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
             >
               📊 View My Attendance
+            </Link>
+            <Link
+              href={`/courses/${courseId}/attendance`}
+              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+            >
+              📄 Mark My Attendance
             </Link>
           </div>
         )}
@@ -358,6 +393,93 @@ export default function CoursePage() {
 
             )}
           </div>
+        )}
+
+        {/* Attendance History Section (Teacher Only) */}
+        {isTeacher && (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 mt-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <p className="text-sm text-gray-600 mb-1">Overall Attendance Rate</p>
+                <p className="text-3xl font-bold text-gray-900">{attendanceStats.percentage}%</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <p className="text-sm text-gray-600 mb-1">Total Records</p>
+                <p className="text-3xl font-bold text-gray-900">{attendanceStats.total}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <p className="text-sm text-gray-600 mb-1">Present</p>
+                <p className="text-3xl font-bold text-green-600">{attendanceStats.present}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <p className="text-sm text-gray-600 mb-1">Absent</p>
+                <p className="text-3xl font-bold text-red-600">{attendanceStats.absent}</p>
+              </div>
+            </div>
+
+            {/* Attendance History Table */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold">Attendance History</h2>
+              </div>
+
+              {attendanceRecords.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-gray-600">No attendance records found for this course.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Student
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Notes
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {attendanceRecords.map((record) => {
+                        const student = students.find(s => s.id === record.student_id)
+                        return (
+                          <tr key={record.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(record.date).toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {student?.full_name || 'Unknown Student'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(record.status)}`}>
+                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {record.notes || '-'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Enroll Student Modal */}

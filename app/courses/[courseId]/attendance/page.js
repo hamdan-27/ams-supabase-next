@@ -7,6 +7,7 @@ import Link from 'next/link'
 
 export default function AttendancePage() {
   const [user, setUser] = useState(null)
+  const [userRole, setUserRole] = useState(null)
   const [course, setCourse] = useState(null)
   const [students, setStudents] = useState([])
   const [attendance, setAttendance] = useState({})
@@ -33,13 +34,20 @@ export default function AttendancePage() {
         .eq('id', session.user.id)
         .single()
 
-      if (profile?.role !== 'teacher') {
+      if (!profile) {
+        router.push('/login')
+        return
+      }
+
+      // Allow both teacher and student roles
+      if (profile.role !== 'teacher' && profile.role !== 'student') {
         router.push('/login')
         return
       }
 
       setUser(profile)
-      await loadCourseData()
+      setUserRole(profile.role)
+      await loadCourseData(profile)
       setLoading(false)
     }
 
@@ -52,7 +60,7 @@ export default function AttendancePage() {
     }
   }, [selectedDate, students, loading])
 
-  const loadCourseData = async () => {
+  const loadCourseData = async (profile) => {
     // Load course details
     const { data: courseData } = await supabase
       .from('courses')
@@ -62,29 +70,57 @@ export default function AttendancePage() {
 
     setCourse(courseData)
 
-    // Load enrolled students
-    const { data: enrollments, error } = await supabase
-      .from('enrollments')
-      .select(`
-        student_id,
-        profiles!enrollments_student_id_fkey (
-          id,
-          full_name,
-          email
-        )
-      `)
-      .eq('course_id', courseId);
-    console.log(enrollments);
-    const studentList = enrollments?.map(e => e.profiles).filter(Boolean) || []
-    setStudents(studentList)
+    if (profile.role === 'teacher') {
+      // Teachers see all enrolled students
+      const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select(`
+          student_id,
+          profiles!enrollments_student_id_fkey (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('course_id', courseId)
+
+      const studentList = enrollments?.map(e => e.profiles).filter(Boolean) || []
+      setStudents(studentList)
+    } else {
+      // Students only see themselves
+      const { data: enrollment } = await supabase
+        .from('enrollments')
+        .select(`
+          student_id,
+          profiles!enrollments_student_id_fkey (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('course_id', courseId)
+        .eq('student_id', profile.id)
+        .single()
+
+      if (enrollment?.profiles) {
+        setStudents([enrollment.profiles])
+      }
+    }
   }
 
   const loadExistingAttendance = async () => {
-    const { data: existingRecords } = await supabase
+    let query = supabase
       .from('attendance')
       .select('*')
       .eq('course_id', courseId)
       .eq('date', selectedDate)
+
+    // Students can only see their own attendance
+    if (userRole === 'student') {
+      query = query.eq('student_id', user.id)
+    }
+
+    const { data: existingRecords } = await query
 
     const attendanceMap = {}
     const notesMap = {}
@@ -117,12 +153,18 @@ export default function AttendancePage() {
     setMessage({ type: '', text: '' })
 
     try {
-      // Delete existing attendance records for this date and course
-      await supabase
+      // Delete existing attendance records for this date and course (for the specific student if student)
+      let deleteQuery = supabase
         .from('attendance')
         .delete()
         .eq('course_id', courseId)
         .eq('date', selectedDate)
+
+      if (userRole === 'student') {
+        deleteQuery = deleteQuery.eq('student_id', user.id)
+      }
+
+      await deleteQuery
 
       // Prepare new attendance records
       const records = Object.entries(attendance)
@@ -181,6 +223,9 @@ export default function AttendancePage() {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
+  const isTeacher = userRole === 'teacher'
+  const isStudent = userRole === 'student'
+
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -221,8 +266,16 @@ export default function AttendancePage() {
             </div>
             <div className="flex-1 text-right">
               <div className="text-sm text-gray-600">
-                <p className="mb-1">Total Students: <span className="font-semibold text-gray-900">{students.length}</span></p>
-                <p>Marked: <span className="font-semibold text-gray-900">{getMarkedCount()}</span></p>
+                {isStudent ? (
+                  <p className="mb-1">Your Attendance</p>
+                ) : (
+                  <p className="mb-1">
+                    Total Students: <span className="font-semibold text-gray-900">{students.length}</span>
+                  </p>
+                )}
+                <p>
+                  Marked: <span className="font-semibold text-gray-900">{getMarkedCount()}</span>
+                </p>
               </div>
             </div>
           </div>
@@ -231,12 +284,18 @@ export default function AttendancePage() {
         {/* Attendance List */}
         {students.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-600">No students enrolled in this course yet.</p>
+            <p className="text-gray-600">
+              {isStudent
+                ? 'You are not enrolled in this course.'
+                : 'No students enrolled in this course yet.'}
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold">Mark Attendance</h2>
+              <h2 className="text-lg font-semibold">
+                Mark {isStudent ? 'Your ' : ''}Attendance
+              </h2>
             </div>
             <div className="divide-y divide-gray-200">
               {students.map((student) => (
@@ -255,8 +314,8 @@ export default function AttendancePage() {
                           key={status}
                           onClick={() => handleStatusChange(student.id, status)}
                           className={`px-4 py-2 text-white text-sm rounded-lg transition capitalize cursor-pointer ${attendance[student.id] === status
-                              ? getActiveStatusColor(status)
-                              : getStatusColor(status)
+                            ? getActiveStatusColor(status)
+                            : getStatusColor(status)
                             }`}
                         >
                           {status}
@@ -289,7 +348,7 @@ export default function AttendancePage() {
               disabled={saving || getMarkedCount() === 0}
               className="px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saving ? 'Saving...' : 'Save Attendance'}
+              {saving ? 'Saving...' : (isStudent ? 'Mark My Attendance' : 'Save Attendance')}
             </button>
           </div>
         )}
