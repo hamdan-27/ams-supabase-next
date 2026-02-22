@@ -25,8 +25,11 @@ const CourseModal = ({ onClose, onCourseCreated }) => {
       onCourseCreated?.(data)
       onClose()
     } catch (error) {
-      console.error('Error creating course:', error)
-      alert('Failed to create course')
+      console.error('Failed to create course:', error)
+      const errorMessage =
+        (error && (error.message || error.error_description || error.toString())) ||
+        'An unknown error occurred.'
+      alert(`Failed to create course: ${errorMessage}`)
     } finally {
       setLoading(false)
     }

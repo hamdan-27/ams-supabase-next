@@ -39,7 +39,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-    console.log("Login:", { email, password });
   };
 
   return (
